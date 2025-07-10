@@ -19,8 +19,8 @@ def test_submit_solution(client):
         "samples": [{"input": "1 2\n", "output": "3\n"}],
         "testcases": [{"input": "1 2\n", "output": "3\n"}],
         "constraints": "|a|,|b| <= 10^9",
-        "time_limit": "1s",
-        "memory_limit": "128MB"
+        "time_limit": 1.0,
+        "memory_limit": 128
     }
     client.post("/api/problems/", json=problem_data)
     
@@ -68,8 +68,8 @@ def test_get_submission_result(client):
         "samples": [{"input": "1 2\n", "output": "3\n"}],
         "testcases": [{"input": "1 2\n", "output": "3\n"}],
         "constraints": "|a|,|b| <= 10^9",
-        "time_limit": "1s",
-        "memory_limit": "128MB"
+        "time_limit": 1.0,
+        "memory_limit": 128
     }
     client.post("/api/problems/", json=problem_data)
     
@@ -99,8 +99,17 @@ def test_get_submission_result(client):
     assert data["code"] == 200
     assert data["msg"] == "success"
     assert "data" in data
-    assert "status" in data["data"]
     assert "score" in data["data"]
+    assert "counts" in data["data"]
+    assert "time" in data["data"]
+    assert "memory" in data["data"]
+    
+    # Assert specific expected values based on test case
+    # Problem has 1 test case, each worth 10 points, correct solution should get full score
+    assert data["data"]["score"] == 10  # 1 test case × 10 points
+    assert data["data"]["counts"] == 10  # Total possible points
+    assert data["data"]["time"] > 0  # Execution time should be positive
+    assert data["data"]["memory"] > 0  # Memory usage should be positive
     
     # Test non-existent submission
     response = client.get("/api/submissions/999999")
@@ -122,8 +131,8 @@ def test_get_submissions_list(client):
         "samples": [{"input": "1 2\n", "output": "3\n"}],
         "testcases": [{"input": "1 2\n", "output": "3\n"}],
         "constraints": "|a|,|b| <= 10^9",
-        "time_limit": "1s",
-        "memory_limit": "128MB"
+        "time_limit": 1.0,
+        "memory_limit": 128
     }
     client.post("/api/problems/", json=problem_data)
     
@@ -175,8 +184,8 @@ def test_rejudge_submission(client):
         "samples": [{"input": "1 2\n", "output": "3\n"}],
         "testcases": [{"input": "1 2\n", "output": "3\n"}],
         "constraints": "|a|,|b| <= 10^9",
-        "time_limit": "1s",
-        "memory_limit": "128MB"
+        "time_limit": 1.0,
+        "memory_limit": 128
     }
     client.post("/api/problems/", json=problem_data)
     

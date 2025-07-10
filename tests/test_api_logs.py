@@ -22,8 +22,8 @@ def test_get_submission_log(client):
             {"input": "10 20\n", "output": "30\n"}
         ],
         "constraints": "|a|,|b| <= 10^9",
-        "time_limit": "1s",
-        "memory_limit": "128MB"
+        "time_limit": 1.0,
+        "memory_limit": 128
     }
     client.post("/api/problems/", json=problem_data)
     
@@ -52,7 +52,35 @@ def test_get_submission_log(client):
     assert data["code"] == 200
     assert data["msg"] == "success"
     assert "data" in data
-    assert isinstance(data["data"], list)
+    assert isinstance(data["data"], dict)
+    
+    # Check the new API spec structure
+    assert "status" in data["data"]
+    assert "score" in data["data"]
+    assert "counts" in data["data"]
+    assert "time" in data["data"]
+    assert "memory" in data["data"]
+    
+    # Assert specific expected values based on test case
+    # Problem has 2 test cases, each worth 10 points, correct solution should get full score
+    assert data["data"]["score"] == 20  # 2 test cases × 10 points each
+    assert data["data"]["counts"] == 20  # Total possible points
+    assert data["data"]["time"] > 0  # Execution time should be positive
+    assert data["data"]["memory"] > 0  # Memory usage should be positive
+    
+    # Check status array has exactly 2 test cases with specific expected results
+    assert len(data["data"]["status"]) == 2  # Should have exactly 2 test cases
+    
+    # Sort by id to ensure consistent ordering
+    status_items = sorted(data["data"]["status"], key=lambda x: x["id"])
+    
+    # Test case 1: input "1 2" -> output "3" (should be AC)
+    assert status_items[0]["id"] == 1
+    assert status_items[0]["result"] == "AC"
+    
+    # Test case 2: input "10 20" -> output "30" (should be AC)
+    assert status_items[1]["id"] == 2
+    assert status_items[1]["result"] == "AC"
     
     # Test as admin
     setup_admin_session(client)
@@ -90,8 +118,8 @@ def test_configure_log_visibility(client):
         "samples": [{"input": "1 2\n", "output": "3\n"}],
         "testcases": [{"input": "1 2\n", "output": "3\n"}],
         "constraints": "|a|,|b| <= 10^9",
-        "time_limit": "1s",
-        "memory_limit": "128MB"
+        "time_limit": 1.0,
+        "memory_limit": 128
     }
     client.post("/api/problems/", json=problem_data)
     
@@ -143,8 +171,8 @@ def test_access_audit_logs(client):
         "samples": [{"input": "1 2\n", "output": "3\n"}],
         "testcases": [{"input": "1 2\n", "output": "3\n"}],
         "constraints": "|a|,|b| <= 10^9",
-        "time_limit": "1s",
-        "memory_limit": "128MB"
+        "time_limit": 1.0,
+        "memory_limit": 128
     }
     client.post("/api/problems/", json=problem_data)
     

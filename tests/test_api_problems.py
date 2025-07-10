@@ -1,6 +1,6 @@
 import uuid
-import pytest
-from test_helpers import setup_admin_session, setup_user_session, reset_system, create_test_admin, create_test_user
+
+from test_helpers import setup_user_session, reset_system, create_test_user
 
 
 def test_get_problems_list(client):
@@ -16,10 +16,11 @@ def test_get_problems_list(client):
 
 
 def test_add_problem(client):
-    """Test POST /api/problems/"""
+    """Test POST /api/problems/ - authenticated users can add problems"""
     # Reset system
     reset_system(client)
-    
+
+    # Test admin user can add problem (using default admin session)
     # Add problem
     problem_data = {
         "id": "test_sum_" + uuid.uuid4().hex[:4],
@@ -33,15 +34,14 @@ def test_add_problem(client):
             {"input": "1 2", "output": "3"},
             {"input": "10 20", "output": "30"}
         ],
-        "time_limit": "1s",
-        "memory_limit": "128MB",
+        "time_limit": 1.0,
+        "memory_limit": 128,
         "hint": "有负数哦！",
         "source": "测试来源",
         "tags": ["基础题"],
         "author": "测试作者",
         "difficulty": "入门"
     }
-    
     response = client.post("/api/problems/", json=problem_data)
     assert response.status_code == 200
     data = response.json()
@@ -49,23 +49,30 @@ def test_add_problem(client):
     assert data["msg"] == "add success"
     assert "data" in data
     assert "id" in data["data"]
-    
-    # Test non-admin cannot add problem
+
+    # Test that regular users can now add problems
     # Create regular user via API
     username, password, user_id = create_test_user(client)
-    
+
     # Set up user session (not admin)
     setup_user_session(client, username, password)
-    
+
+    # Change problem ID to avoid conflicts
+    problem_data["id"] = "test_user_" + uuid.uuid4().hex[:4]
+
     response = client.post("/api/problems/", json=problem_data)
-    assert response.status_code in (401, 403)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["code"] == 200
+    assert data["msg"] == "add success"
+    assert "data" in data
+    assert "id" in data["data"]
 
 
 def test_get_problem_info(client):
     """Test GET /api/problems/{problem_id}"""
     # Reset system
     reset_system(client)
-    
     problem_id = "test_problem_" + uuid.uuid4().hex[:4]
     problem_data = {
         "id": problem_id,
@@ -76,17 +83,17 @@ def test_get_problem_info(client):
         "samples": [{"input": "1 2", "output": "3"}],
         "constraints": "|a|,|b| <= 10^9",
         "testcases": [{"input": "1 2", "output": "3"}],
-        "time_limit": "1s",
-        "memory_limit": "128MB",
+        "time_limit": 1.0,
+        "memory_limit": 128,
         "hint": "测试提示",
         "source": "测试来源",
         "tags": ["测试标签"],
         "author": "测试作者",
         "difficulty": "入门"
     }
-    
+
     client.post("/api/problems/", json=problem_data)
-    
+
     # Get problem info
     response = client.get(f"/api/problems/{problem_id}")
     assert response.status_code == 200
@@ -95,7 +102,6 @@ def test_get_problem_info(client):
     assert data["msg"] == "success"
     assert data["data"]["id"] == problem_id
     assert data["data"]["title"] == "测试题目"
-    
     # Test non-existent problem
     response = client.get("/api/problems/nonexistent")
     assert response.status_code == 404
@@ -105,7 +111,6 @@ def test_delete_problem(client):
     """Test DELETE /api/problems/{problem_id}"""
     # Reset system
     reset_system(client)
-    
     problem_id = "test_delete_" + uuid.uuid4().hex[:4]
     problem_data = {
         "id": problem_id,
@@ -116,17 +121,17 @@ def test_delete_problem(client):
         "samples": [{"input": "1 2", "output": "3"}],
         "constraints": "|a|,|b| <= 10^9",
         "testcases": [{"input": "1 2", "output": "3"}],
-        "time_limit": "1s",
-        "memory_limit": "128MB",
+        "time_limit": 1.0,
+        "memory_limit": 128,
         "hint": "测试提示",
         "source": "测试来源",
         "tags": ["测试标签"],
         "author": "测试作者",
         "difficulty": "入门"
     }
-    
+
     client.post("/api/problems/", json=problem_data)
-    
+
     # Delete problem
     response = client.delete(f"/api/problems/{problem_id}")
     assert response.status_code == 200
@@ -134,11 +139,11 @@ def test_delete_problem(client):
     assert data["code"] == 200
     assert data["msg"] == "delete success"
     assert data["data"]["id"] == problem_id
-    
+
     # Verify problem is deleted
     response = client.get(f"/api/problems/{problem_id}")
     assert response.status_code == 404
-    
+
     # Test non-existent problem
     response = client.delete("/api/problems/nonexistent")
     assert response.status_code == 404
