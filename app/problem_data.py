@@ -40,8 +40,8 @@ class ProblemProfile:
     hint: str = ''
     source: str = ''
     tags: list[str] = field(default_factory=list)
-    time_limit: str = '1s'
-    memory_limit: str = '128MB'
+    time_limit: str = ''
+    memory_limit: str = ''
     author: str = ''
     difficulty: str = ''
     

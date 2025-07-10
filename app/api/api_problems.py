@@ -19,7 +19,11 @@ async def get(response: Response) -> dict:
     """
     problems_profile: list[dict] = [] 
     for item_name in os.listdir('./problems'):
-        with open(f'./problems/{item_name}/data.json', 'r', encoding = 'utf-8') as f:
+        with open(
+            f'./problems/{item_name}/data.json',
+            'r',
+            encoding = 'utf-8'
+        ) as f:
             data = json.loads(f.read())
             filtered_data: dict = {"id": data["id"], "title": data["title"]}
             problems_profile.append(filtered_data)
@@ -77,14 +81,18 @@ async def get_info(problem_id: str, response: Response):
     for item_name in os.listdir('./problems'):
         if problem_id == item_name:
             response.status_code = 200
-            with open(f'./problems/{item_name}/data.json', 'r', encoding = 'utf-8') as f:
+            with open(
+                f'./problems/{item_name}/data.json',
+                'r',
+                encoding = 'utf-8'
+            ) as f:
                 data = json.loads(f.read())
                 return {"code": 200, "msg": "success", "data": data}
     response.status_code = 404
     return {"code": 404, "msg": "problem not found", "data": None}
 
 @problems.delete('/{problem_id}')
-async def delete(problem_id: str, response: Response):
+async def delete(problem_id: str, request: Request, response: Response):
     """
     Delete problems.
     
@@ -98,6 +106,11 @@ async def delete(problem_id: str, response: Response):
         200: successfully deleted
         404: problem not found
     """
+    # Check permission
+    if request.session["role"] != "admin":
+        response.status_code = 403
+        return {"code": 403, "msg": "insufficient permissions", "data": None}
+    
     for item_name in os.listdir('./problems'):
         if problem_id == item_name:
             response.status_code = 200
