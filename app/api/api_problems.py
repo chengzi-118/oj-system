@@ -1,76 +1,105 @@
 from fastapi import APIRouter, Request, Response
-import os
+import sqlite3
+from app.problem_data import ProblemProfile
 import json
-from problem_data import ProblemProfile
-import shutil
 
 problems = APIRouter()
 
 @problems.get('/')
-async def get(response: Response) -> dict:
+async def get(request: Request, response: Response):
     """
     Check the list of problems.
-    
-    Access:
-        Public.
         
     Returns:
         dict: dict of id and title of all problems
     """
+    if "user_id" not in request.session:
+        response.status_code = 401
+        return {"code": 401, "msg": "not logged in", "data": None}
+    
     problems_profile: list[dict] = [] 
-    for item_name in os.listdir('./problems'):
-        with open(
-            f'./problems/{item_name}/data.json',
-            'r',
-            encoding = 'utf-8'
-        ) as f:
-            data = json.loads(f.read())
-            filtered_data: dict = {"id": data["id"], "title": data["title"]}
-            problems_profile.append(filtered_data)
-    ret = {"code": 200, "msg": "success", "data": problems_profile}
+    
+    with sqlite3.connect('./app/oj_system.db') as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM problems")
+        rows = cursor.fetchall()
+        for row in rows:
+            problems_profile.append({"id": row[0], "title": row[1]})
     response.status_code = 200
-    return ret
+    return {
+        "code": 200,
+        "msg": "success",
+        "data": problems_profile
+    }
 
 @problems.post('/')
 async def post(request: Request, response: Response):
     """
     Add problems.
-    
-    Access:
-        Public.
 
     Returns:
         200: success
         400: missing field / format error
         409: id exists
     """
-    data = await request.json()
+    if "user_id" not in request.session:
+        response.status_code = 401
+        return {"code": 401, "msg": "not logged in", "data": None}
+    
+    try:
+        data = await request.json()
+    except json.decoder.JSONDecodeError:
+        response.status_code = 400
+        return {"code": 400, "msg": "format error", "data": None}
     
     # Check whether data is legal
     try:
-        p = ProblemProfile(**data)
+        problem_profile = ProblemProfile(**data)
     except TypeError:
         response.status_code = 400
         return {"code": 400, "msg": "missing field / format error", "data": None}
     
-    # Check whether the problem exists
-    for item_name in os.listdir('./problems'):
-        if item_name == str(p.id):
+    problem_data = problem_profile.to_dict()
+    
+    with sqlite3.connect('./app/oj_system.db') as conn:
+        cursor = conn.cursor()
+        
+        # Check whether the problem exists
+        cursor.execute("SELECT id FROM problems WHERE id = ?", (problem_profile.id,))
+        if cursor.fetchone():
             response.status_code = 409
             return {"code": 409, "msg": "id exists", "data": None}
+        
+        # Add into sheet
+        cursor.execute(
+            """INSERT INTO problems (
+                id, title, description, input_description, output_description, 
+                samples, constraints, testcases, hint, source, tags, 
+                time_limit, memory_limit, author, difficulty
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                problem_data['id'], problem_data['title'],
+                problem_data['description'], problem_data['input_description'],
+                problem_data['output_description'], problem_data['samples'],
+                problem_data['constraints'], problem_data['testcases'],
+                problem_data['hint'], problem_data['source'], problem_data['tags'],
+                problem_data['time_limit'], problem_data['memory_limit'],
+                problem_data['author'], problem_data['difficulty']
+            )
+        )
+        conn.commit()
     
-    p.save_to_local()
     response.status_code = 200
-    ret = {"code": 200, "msg": "add success", "data": {"id": p.id}}
-    return ret
+    return {
+        "code": 200,
+        "msg": "add success",
+        "data": {"id": problem_profile.id}
+    }
 
 @problems.get('/{problem_id}')
-async def get_info(problem_id: str, response: Response):
+async def get_info(problem_id: str, request: Request, response: Response):
     """
     Check the problem information.
-    
-    Access:
-        Public.
         
     Args:
         problem_id (str): id of the problem
@@ -78,16 +107,37 @@ async def get_info(problem_id: str, response: Response):
     Returns:
         dict: dict of problem's information
     """
-    for item_name in os.listdir('./problems'):
-        if problem_id == item_name:
-            response.status_code = 200
-            with open(
-                f'./problems/{item_name}/data.json',
-                'r',
-                encoding = 'utf-8'
-            ) as f:
-                data = json.loads(f.read())
-                return {"code": 200, "msg": "success", "data": data}
+    if "user_id" not in request.session:
+        response.status_code = 401
+        return {"code": 401, "msg": "not logged in", "data": None}
+    with sqlite3.connect('./app/oj_system.db') as conn:
+        cursor = conn.cursor()
+        
+        # Check whether the problem exists
+        cursor.execute("SELECT * FROM problems WHERE id = ?", (problem_id,))
+        row = cursor.fetchone()
+        if row:
+            # Change information in sheet to dict
+            problem_info: dict = {}
+            
+            problem_info["id"] = row[0]
+            problem_info["title"] = row[1]
+            problem_info["description"] = row[2]
+            problem_info["input_description"] = row[3]
+            problem_info["output_description"] = row[4]
+            problem_info["samples"] = json.loads(row[5])
+            problem_info["constraints"] = row[6]
+            problem_info["testcases"] = json.loads(row[7])
+            problem_info["hint"] = row[8]
+            problem_info["source"] = row[9]
+            problem_info["tags"] = json.loads(row[10]) if row[10] else []
+            problem_info["time_limit"] = row[11]
+            problem_info["memory_limit"] = row[12]
+            problem_info["author"] = row[13]
+            problem_info["difficulty"] = row[14]
+            
+            return {"code": 200, "msg": "success", "data": problem_info}
+        
     response.status_code = 404
     return {"code": 404, "msg": "problem not found", "data": None}
 
@@ -95,27 +145,33 @@ async def get_info(problem_id: str, response: Response):
 async def delete(problem_id: str, request: Request, response: Response):
     """
     Delete problems.
-    
-    Access:
-        Admin.
 
     Args:
         problem_id (str): id of the problem
         
     Returns:
         200: successfully deleted
+        401: not logged in
         404: problem not found
     """
+    if "user_id" not in request.session:
+        response.status_code = 401
+        return {"code": 401, "msg": "not logged in", "data": None}
+    
     # Check permission
     if request.session["role"] != "admin":
         response.status_code = 403
         return {"code": 403, "msg": "insufficient permissions", "data": None}
     
-    for item_name in os.listdir('./problems'):
-        if problem_id == item_name:
+    with sqlite3.connect('./app/oj_system.db') as conn:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM problems WHERE id = ?", (problem_id,))
+        conn.commit()
+        
+        # Check whether the problem exists
+        if cursor.rowcount > 0:
             response.status_code = 200
-            shutil.rmtree(f'./problems/{problem_id}')
             return {"code": 200, "msg": "delete success", "data": {"id": problem_id}}
-            
-    response.status_code = 404
-    return {"code": 404, "msg": "problem not found", "data": None}
+        else:
+            response.status_code = 404
+            return {"code": 404, "msg": "problem not found", "data": None}

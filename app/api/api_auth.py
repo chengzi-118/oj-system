@@ -31,7 +31,7 @@ async def login(request: Request, response: Response):
         response.status_code = 400
         return {"code": 400, "msg": "format error", "data": None}
     
-    with sqlite3.connect('./users.db') as conn:
+    with sqlite3.connect('./app/oj_system.db') as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM users WHERE name == ?", (data['username'], ))
         result = cursor.fetchone()

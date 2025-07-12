@@ -23,8 +23,8 @@ class ProblemProfile:
             hint(str): additional hints.
             source(str): source of the problem.
             tags(list): tags of the problem.
-            time_limit(str): time limit (e.g., "1s").
-            memory_limit(str): memory limit (e.g., "128MB").
+            time_limit(float): time limit (e.g., "1s").
+            memory_limit(int): memory limit (e.g., "128MB").
             author(str): author of the problem.
             difficulty(str): difficulty level.
     """
@@ -40,17 +40,15 @@ class ProblemProfile:
     hint: str = ''
     source: str = ''
     tags: list[str] = field(default_factory=list)
-    time_limit: str = ''
-    memory_limit: str = ''
+    time_limit: float = 3.0
+    memory_limit: int = 128
     author: str = ''
     difficulty: str = ''
     
-    def save_to_local(self):
-        """Saves problem's profile data to a JSON file."""
-
-        # Construct singer-specific folder path
-        os.makedirs(save_dir + str(self.id), exist_ok = True)
-
-        json_file_path = save_dir + str(self.id) + '/data.json'
-        with open(json_file_path, 'w', encoding='utf-8') as f:
-            json.dump(asdict(self), f, indent=4, ensure_ascii=False)
+    def to_dict(self):
+        """Change ProblemProfile to dict"""
+        data = asdict(self)
+        data['samples'] = json.dumps(data['samples'], ensure_ascii=False)
+        data['testcases'] = json.dumps(data['testcases'], ensure_ascii=False)
+        data['tags'] = json.dumps(data['tags'], ensure_ascii=False)
+        return data

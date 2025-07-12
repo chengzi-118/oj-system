@@ -7,6 +7,21 @@ users = APIRouter()
 
 @users.post('/admin')
 async def create_admin(request: Request, response: Response):
+    """
+    Create admin account.
+    
+    Access:
+        Admin.
+
+    Args:
+        username(str).
+        password(str).
+
+    Returns:
+        200: success.
+        400: user exists / format error.
+        403: insufficient permissions.
+    """
     try:
         data = await request.json()
     except json.decoder.JSONDecodeError:
@@ -29,7 +44,7 @@ async def create_admin(request: Request, response: Response):
         response.status_code = 403
         return {"code": 403, "msg": "insufficient permissions", "data": None}
 
-    with sqlite3.connect('./users.db') as conn:
+    with sqlite3.connect('./app/oj_system.db') as conn:
         cursor = conn.cursor()
         try:
             cursor.execute(
@@ -65,6 +80,20 @@ async def create_admin(request: Request, response: Response):
 
 @users.post('/')
 async def create_user(request: Request, response: Response):
+    """
+    Create user.
+    
+    Access:
+        Public.
+
+    Args:
+        username(str).
+        password(str).
+
+    Returns:
+        200: success.
+        400: user exists / format error.
+    """
     try:
         data = await request.json()
     except json.decoder.JSONDecodeError:
@@ -82,7 +111,7 @@ async def create_user(request: Request, response: Response):
         response.status_code = 400
         return {"code": 400, "msg": "password too short", "data": None}
 
-    with sqlite3.connect('./users.db') as conn:
+    with sqlite3.connect('./app/oj_system.db') as conn:
         cursor = conn.cursor()
         try:
             cursor.execute(
@@ -116,13 +145,29 @@ async def create_user(request: Request, response: Response):
 # TODO
 @users.get('/{user_id}')
 async def get_info(user_id: int, request: Request, response: Response):
+    """
+    Get user's information.
+
+    Args:
+        user_id (int): id of the user.
+
+    Returns:
+        200: success.
+        400: format error.
+        401: not logged in.
+        403: insufficient permissions.
+        404: user not found.
+    """
     # Check permission
-    if "role" not in request.session or request.session["role"] != "admin":
-        if "user_id" not in request.session or request.session["user_id"] != user_id:
-            response.status_code = 403
-            return {"code": 403, "msg": "insufficient permissions", "data": None}
+    if "user_id" not in request.session:
+        response.status_code = 401
+        return {"code": 401, "msg": "not logged in", "data": None}
+    
+    if request.session["role"] != "admin" and request.session["user_id"] != user_id:
+        response.status_code = 403
+        return {"code": 403, "msg": "insufficient permissions", "data": None}
         
-    with sqlite3.connect('./users.db') as conn:
+    with sqlite3.connect('./app/oj_system.db') as conn:
         cursor = conn.cursor()
         cursor.execute(
                 "SELECT * FROM users WHERE id = ?",
@@ -148,6 +193,20 @@ async def get_info(user_id: int, request: Request, response: Response):
 
 @users.put('/{user_id}/role')
 async def change_role(user_id: int, request: Request, response: Response):
+    """
+    Change user's role.
+
+    Args:
+        user_id (int): id of the user.
+        role(str): new role of the user.
+
+    Returns:
+        200: success.
+        400: format error.
+        401: not logged in.
+        403: insufficient permissions.
+        404: user not found.
+    """
     try:
         data = await request.json()
     except json.decoder.JSONDecodeError:
@@ -155,7 +214,11 @@ async def change_role(user_id: int, request: Request, response: Response):
         return {"code": 400, "msg": "format error", "data": None}
     
     # Check permission
-    if "role" not in request.session or request.session["role"] != "admin":
+    if "user_id" not in request.session:
+        response.status_code = 401
+        return {"code": 401, "msg": "not logged in", "data": None}
+    
+    if request.session["role"] != "admin":
         response.status_code = 403
         return {"code": 403, "msg": "insufficient permissions", "data": None}
     
@@ -165,13 +228,21 @@ async def change_role(user_id: int, request: Request, response: Response):
         response.status_code = 400
         return {"code": 400, "msg": "format error", "data": None}
 
-    with sqlite3.connect('./users.db') as conn:
+    with sqlite3.connect('./app/oj_system.db') as conn:
         cursor = conn.cursor()
         cursor.execute(
             "UPDATE users SET role = ? WHERE id = ?",
             (data["role"], user_id, )
         )
         conn.commit()
+        
+        if cursor.rowcount == 0:
+            response.status_code = 404
+            return {
+                "code": 404, 
+                "msg": "user not found",
+                "data": None
+            }
         
         response.status_code = 200
         return {
@@ -183,35 +254,43 @@ async def change_role(user_id: int, request: Request, response: Response):
 # TODO       
 @users.get('/')
 async def get_users(request: Request, response: Response):
-    
+    """
+    Get information of all users.
+
+    Args:
+        page(int)
+        page_size(int)
+
+    Returns:
+        200: success.
+        400: format error.
+        401: not logged in.
+        403: insufficient permissions.
+        404: user not found.
+    """
     try:
         data = await request.json()
     except json.decoder.JSONDecodeError:
         data = dict()
     
     # Check permission
+    if "user_id" not in request.session:
+        response.status_code = 401
+        return {"code": 401, "msg": "not logged in", "data": None}
+    
     if request.session["role"] != "admin":
         response.status_code = 403
         return {"code": 403, "msg": "insufficient permissions", "data": None}
     
     # Get all data
-    with sqlite3.connect('./users.db') as conn:
+    with sqlite3.connect('./app/oj_system.db') as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM users")
         rows = cursor.fetchall()
         
     match_users = []
     
-    # Match requirements
     for row in rows:
-        if "username" in data:
-            if data["username"] != row[1]:
-                continue
-            
-        if "role" in data:
-            if data["role"] != row[3]:
-                continue
-        
         match_users.append({"user_id": row[0]})
        
     if match_users:
