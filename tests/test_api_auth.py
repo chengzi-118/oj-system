@@ -13,7 +13,7 @@ class TestAuth:
         """Test successful admin login"""
         response = client.post("/api/auth/login", json={
             "username": "admin",
-            "password": "admin"
+            "password": "admintestpassword"
         })
         assert response.status_code == 200
         data = response.json()
@@ -25,16 +25,16 @@ class TestAuth:
     def test_login_success_user(self):
         """Test successful user login"""
         # First create a user
-        client.post("/api/auth/login", json={"username": "admin", "password": "admin"})
+        client.post("/api/auth/login", json={"username": "admin", "password": "admintestpassword"})
         client.post("/api/users/", json={
             "username": "testuser",
-            "password": "testpass"
+            "password": "testpassword"
         })
         client.post("/api/auth/logout")
         # Now test user login
         response = client.post("/api/auth/login", json={
             "username": "testuser",
-            "password": "testpass"
+            "password": "testpassword"
         })
         assert response.status_code == 200
         data = response.json()
@@ -47,7 +47,7 @@ class TestAuth:
         """Test login with invalid username"""
         response = client.post("/api/auth/login", json={
             "username": "nonexistent",
-            "password": "password"
+            "password": "testpassword"
         })
         assert response.status_code == 401
         data = response.json()
@@ -57,7 +57,7 @@ class TestAuth:
         """Test login with invalid password"""
         response = client.post("/api/auth/login", json={
             "username": "admin",
-            "password": "wrongpass"
+            "password": "wrongpassword"
         })
         assert response.status_code == 401
         data = response.json()
@@ -75,7 +75,7 @@ class TestAuth:
         # First login
         client.post("/api/auth/login", json={
             "username": "admin",
-            "password": "admin"
+            "password": "admintestpassword"
         })
         # Then logout
         response = client.post("/api/auth/logout")
@@ -97,15 +97,16 @@ class TestAuth:
 
     def test_session_persistence(self):
         """Test that session persists across requests"""
-        # Login
+        # Login as admin
         login_response = client.post("/api/auth/login", json={
             "username": "admin",
-            "password": "admin"
+            "password": "admintestpassword"
         })
         assert login_response.status_code == 200
+        admin_user_id = login_response.json()["data"]["user_id"]
 
         # Make an authenticated request (get user info)
-        user_response = client.get("/api/users/1")
+        user_response = client.get(f"/api/users/{admin_user_id}")
         assert user_response.status_code == 200
 
         # Logout
@@ -113,5 +114,5 @@ class TestAuth:
         assert logout_response.status_code == 200
 
         # Try authenticated request after logout (should fail)
-        user_response_after_logout = client.get("/api/users/1")
+        user_response_after_logout = client.get(f"/api/users/{admin_user_id}")
         assert user_response_after_logout.status_code == 401
