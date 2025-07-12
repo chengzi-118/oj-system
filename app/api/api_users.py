@@ -2,6 +2,7 @@ from fastapi import APIRouter, Request, Response
 import sqlite3
 import json
 import bcrypt
+from datetime import datetime
 
 users = APIRouter()
 
@@ -9,9 +10,6 @@ users = APIRouter()
 async def create_admin(request: Request, response: Response):
     """
     Create admin account.
-    
-    Access:
-        Admin.
 
     Args:
         username(str).
@@ -22,69 +20,16 @@ async def create_admin(request: Request, response: Response):
         400: user exists / format error.
         403: insufficient permissions.
     """
-    try:
-        data = await request.json()
-    except json.decoder.JSONDecodeError:
-        response.status_code = 400
-        return {"code": 400, "msg": "format error", "data": None}
-    
-    # Check params
-    if "username" not in data or "password" not in data:
-        response.status_code = 400
-        return {"code": 400, "msg": "missing field", "data": None}
-    if len(data["username"]) < 3 or len(data["username"]) > 21:
-        response.status_code = 400
-        return {"code": 400, "msg": "username invalid", "data": None}
-    if len(data["password"]) < 6:
-        response.status_code = 400
-        return {"code": 400, "msg": "password too short", "data": None}
-    
-    # Check permission
-    if "role" not in request.session or request.session["role"] != "admin":
-        response.status_code = 403
-        return {"code": 403, "msg": "insufficient permissions", "data": None}
-
-    with sqlite3.connect('./app/oj_system.db') as conn:
-        cursor = conn.cursor()
-        try:
-            cursor.execute(
-                "INSERT INTO users (name, password, role) VALUES (?, ?, ?)",
-                (
-                    data["username"],
-                    bcrypt.hashpw(
-                        data["password"].encode('utf-8'),
-                        bcrypt.gensalt(rounds = 12)
-                    ).decode('utf-8'),
-                    "admin",
-                )
-            )
-            conn.commit()
-            
-            # Get user_id
-            cursor.execute(
-                "SELECT * FROM users WHERE name = ?",
-                (data["username"], )
-            )
-            result = cursor.fetchone()
-            return {
-                "code": 200, 
-                "msg": "success", 
-                "data": {
-                    "user_id": int(result[0]),
-                    "username": data["username"]
-                }
-            }
-        except sqlite3.IntegrityError:
-            response.status_code = 400
-            return {"code": 400, "msg": "user exists", "data": None}
+    return await create_user(request, response, "admin")
 
 @users.post('/')
-async def create_user(request: Request, response: Response):
+async def create_user(
+    request: Request,
+    response: Response,
+    role: str = "user"
+):
     """
     Create user.
-    
-    Access:
-        Public.
 
     Args:
         username(str).
@@ -104,25 +49,38 @@ async def create_user(request: Request, response: Response):
     if "username" not in data or "password" not in data:
         response.status_code = 400
         return {"code": 400, "msg": "missing field", "data": None}
-    if len(data["username"]) < 3 or len(data["username"]) > 20:
+    if len(data["username"]) < 3 or len(data["username"]) > 40:
         response.status_code = 400
         return {"code": 400, "msg": "username invalid", "data": None}
     if len(data["password"]) < 6:
         response.status_code = 400
         return {"code": 400, "msg": "password too short", "data": None}
-
+    
+    if role == "admin":
+        if "role" not in request.session:
+            response.status_code = 403
+            return {"code": 400, "msg": "insufficient permissions", "data": None}
+        if request.session["role"] != "admin":
+            response.status_code = 403
+            return {"code": 400, "msg": "insufficient permissions", "data": None}
+            
     with sqlite3.connect('./app/oj_system.db') as conn:
         cursor = conn.cursor()
         try:
             cursor.execute(
-                "INSERT INTO users (name, password, role) VALUES (?, ?, ?)",
+                """INSERT INTO users (
+                    name, password, role, join_time, submit_count, resolve_count
+                    ) VALUES (?, ?, ?, ?, ?, ?)""",
                 (
                     data["username"],
                     bcrypt.hashpw(
                         data["password"].encode('utf-8'),
                         bcrypt.gensalt(rounds = 12)
                     ).decode('utf-8'),
-                    "user",
+                    role,
+                    datetime.now().strftime("%Y-%m-%d"),
+                    0,
+                    0,
                 )
             )
             conn.commit()
@@ -142,7 +100,6 @@ async def create_user(request: Request, response: Response):
             response.status_code = 400
             return {"code": 400, "msg": "user exists", "data": None}
 
-# TODO
 @users.get('/{user_id}')
 async def get_info(user_id: int, request: Request, response: Response):
     """
@@ -250,8 +207,7 @@ async def change_role(user_id: int, request: Request, response: Response):
             "msg": "role updated",
             "data": {"user_id": user_id, "role": data["role"]}
         }
- 
-# TODO       
+
 @users.get('/')
 async def get_users(request: Request, response: Response):
     """

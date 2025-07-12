@@ -9,6 +9,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from contextlib import asynccontextmanager
 import sqlite3
 import bcrypt
+from datetime import datetime
 
 # Call the function before the app starts listening for requests
 @asynccontextmanager
@@ -22,7 +23,10 @@ async def lifespan(app: FastAPI):
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT UNIQUE NOT NULL,
             password TEXT NOT NULL,
-            role TEXT NOT NULL
+            role TEXT NOT NULL,
+            join_time TEXT NOT NULL,
+            submit_count INTEGER NOT NULL,
+            resolve_count INTEGER NOT NULL
         )
     '''
     )
@@ -94,43 +98,14 @@ async def lifespan(app: FastAPI):
                     "admintestpassword".encode('utf-8'),
                     bcrypt.gensalt(rounds=12)
                 ).decode('utf-8'), 
-                "admin"
+                "admin",
+                datetime.now().strftime("%Y-%m-%d"),
+                0,
+                0,
             )
         )
         conn.commit()
         
-    cursor.execute("SELECT * FROM languages WHERE name = ?", ("cpp",))
-    result = cursor.fetchone()
-    if not result:
-        # C++ does not exist, create it
-        cursor.execute(
-            """INSERT INTO languages (
-                name, file_ext, compile_cmd, run_cmd,
-                source_template, time_limit, memory_limit
-            ) VALUES (?, ?, ?, ?, ?, ?, ?)""",
-            (
-                "cpp", ".cpp", "g++ {src} -o {exe} -O2 -std=c++17",
-                "{file_name}.exe", "{code}", 1.0, 128
-            )
-        )
-        conn.commit()
-        
-    cursor.execute("SELECT * FROM languages WHERE name = ?", ("python",))
-    result = cursor.fetchone()
-    if not result:
-        # python does not exist, create it
-        cursor.execute(
-            """INSERT INTO languages (
-                name, file_ext, run_cmd,
-                source_template, time_limit, memory_limit
-            ) VALUES (?, ?, ?, ?, ?, ?)""",
-            (
-                "python", ".py", "python3 {file_name}.py",
-                "{code}", 1.0, 128
-            )
-        )
-        conn.commit()
-    
     yield
     conn.close()
         

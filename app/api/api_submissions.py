@@ -32,6 +32,15 @@ async def submit(request: Request, response: Response):
     
     with sqlite3.connect('./app/oj_system.db') as conn:
         cursor = conn.cursor()
+        
+        # Check problem exists
+        cursor.execute("SELECT * FROM problems WHERE id = ?", (data["problem_id"],))
+        row = cursor.fetchone()
+        
+        if not row:
+            response.status_code = 404
+            return {"code": 404, "msg": "problem not found", "data": None}
+        
         cursor.execute(
                 """INSERT INTO submissions (
                     user_id, problem_id, code, language, status
@@ -75,19 +84,20 @@ async def get_submission_info(
         response.status_code = 401
         return {"code": 401, "msg": "not logged in", "data": None}
     
-    # Check permission
-    if request.session["role"] != "admin":
-        response.status_code = 403
-        return {"code": 403, "msg": "insufficient permissions", "data": None}
-    
     with sqlite3.connect('./app/oj_system.db') as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM submissions WHERE id = ?", (submission_id,))
         row = cursor.fetchone()
         if row:
+            # Check permission
             if request.session["user_id"] != row[1]:
-                response.status_code = 403
-                return {"code": 403, "msg": "insufficient permissions", "data": None}
+                if request.session["role"] != "admin":
+                    response.status_code = 403
+                    return {
+                        "code": 403,
+                        "msg": "insufficient permissions",
+                        "data": None
+                    }
     
             return {
               "code": 200,
@@ -128,7 +138,7 @@ async def rejudge(
             response.status_code = 404
             return {"code": 404, "msg": "submission not found", "data": None}
         else:
-            judge_in_docker(submission_id, row[2], row[3], row[4])
+            asyncio.create_task(judge_in_docker(submission_id, row[2], row[3], row[4]))
             response.status_code = 200
             return {
                 "code": 200,
@@ -137,7 +147,23 @@ async def rejudge(
             }
     
     
-    
+    """pagesize: int = len(match_users)
+        if "page_size" in data:
+            pagesize = data["page_size"]
+           
+        page: int = 0 
+        if "page" in data:
+            page = data["page"]
+        
+        result = match_users[
+            pagesize * page : pagesize * (page + 1)
+        ]
+        response.status_code = 200
+        return {
+            "code": 200, 
+            "msg": "success", 
+            "data": {"total": len(result), "users": result}
+        }"""
     
     
     
