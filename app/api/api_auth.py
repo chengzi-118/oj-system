@@ -41,7 +41,10 @@ async def login(request: Request, response: Response):
                 return {"code": 403, "msg": "banned user", "data": None}
             
             # Check password
-            if bcrypt.checkpw(data['password'].encode('utf-8'), result[2].encode('utf-8')):
+            if bcrypt.checkpw(
+                data['password'].encode('utf-8'),
+                result[2].encode('utf-8')
+            ):
                 request.session["user_id"] = result[0]
                 request.session["user_name"] = data['username']
                 request.session["role"] = result[3]

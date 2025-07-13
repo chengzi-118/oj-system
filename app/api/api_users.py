@@ -67,6 +67,8 @@ async def create_user(
     with sqlite3.connect('./app/oj_system.db') as conn:
         cursor = conn.cursor()
         try:
+            time_str = datetime.now().strftime("%Y-%m-%d")
+            
             cursor.execute(
                 """INSERT INTO users (
                     name, password, role, join_time, submit_count, resolve_count
@@ -78,7 +80,7 @@ async def create_user(
                         bcrypt.gensalt(rounds = 12)
                     ).decode('utf-8'),
                     role,
-                    datetime.now().strftime("%Y-%m-%d"),
+                    time_str,
                     0,
                     0,
                 )
@@ -91,11 +93,28 @@ async def create_user(
                 (data["username"], )
             )
             result = cursor.fetchone()
-            return {
-                "code": 200,
-                "msg": "register success",
-                "data": {"user_id": int(result[0])}
-            }
+            if role == "user":
+                return {
+                    "code": 200,
+                    "msg": "success",
+                    "data": {
+                        "user_id": int(result[0]),
+                        "username": data["username"],
+                        "join_time": time_str,
+                        "role": "user",
+                        "submit_count": 0, 
+                        "resolve_count": 0
+                    }
+                }
+            else:
+                return {
+                    "code": 200,
+                    "msg": "success",
+                    "data": {
+                        "user_id": int(result[0]),
+                        "username": data["username"]
+                    }
+                }
         except sqlite3.IntegrityError:
             response.status_code = 400
             return {"code": 400, "msg": "user exists", "data": None}

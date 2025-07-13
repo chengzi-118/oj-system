@@ -12,6 +12,22 @@ SCORE = 10
 
 @submissions.post('/')
 async def submit(request: Request, response: Response):
+    """
+    Submit for problems.
+    
+    Args: 
+        problem_id: id of the problem.
+        language: language of the code.
+        code: code to be judged.
+        
+    Returns:
+        200: success.
+        400: format error.
+        403: banned user.
+        404: problem not found.
+        429: frequncy out of limit.
+        
+    """
     try:
         data = await request.json()
     except json.decoder.JSONDecodeError:
@@ -79,7 +95,19 @@ async def get_submission_info(
     submission_id: int,
     request: Request,
     response: Response
-):     
+):
+    """
+
+    Args:
+        submission_id (int): id of submission
+
+    Returns:
+        200: success.
+        401: not logged in.
+        403: insufficient permissions.
+        404: submission not found.
+        
+    """
     if "user_id" not in request.session:
         response.status_code = 401
         return {"code": 401, "msg": "not logged in", "data": None}
@@ -120,7 +148,20 @@ async def rejudge(
     submission_id: int,
     request: Request,
     response: Response
-):     
+):
+    """
+    Rejudge by admin.
+    
+    Args:
+        submission_id (int): id of submission
+    
+    Returns:
+        200: success.
+        401: not logged in.
+        403: insufficient permissions.
+        404: submission not found.
+        
+    """
     if "user_id" not in request.session:
         response.status_code = 401
         return {"code": 401, "msg": "not logged in", "data": None}
@@ -145,27 +186,41 @@ async def rejudge(
                 "msg": "rejudge started",
                 "data": {"submission_id": submission_id, "status": "pending"}
             }
+ 
+@submissions.get('/{submission_id}/log')   
+async def see_log(submission_id: int, request: Request, response: Response):
+    if "user_id" not in request.session:
+        response.status_code = 401
+        return {"code": 401, "msg": "not logged in", "data": None}
     
-    
-    """pagesize: int = len(match_users)
-        if "page_size" in data:
-            pagesize = data["page_size"]
-           
-        page: int = 0 
-        if "page" in data:
-            page = data["page"]
-        
-        result = match_users[
-            pagesize * page : pagesize * (page + 1)
-        ]
-        response.status_code = 200
-        return {
-            "code": 200, 
-            "msg": "success", 
-            "data": {"total": len(result), "users": result}
-        }"""
-    
-    
+    with sqlite3.connect('./app/oj_system.db') as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM submissions WHERE id = ?", (submission_id,))
+        row = cursor.fetchone()
+        if row:
+            # Check permission
+            if request.session["user_id"] != row[1]:
+                if request.session["role"] != "admin":
+                    response.status_code = 403
+                    return {
+                        "code": 403,
+                        "msg": "insufficient permissions",
+                        "data": None
+                    }
+                    
+            response.status_code = 200
+            return {
+              "code": 200,
+              "msg": "success",
+              "data": {
+                "status": json.loads(str(row[7])),
+                "score": SCORE,
+                "counts": row[6],
+              }
+            }
+        else:
+            response.status_code = 404
+            return {"code": 404, "msg": "submission not found", "data": None}
     
     
            

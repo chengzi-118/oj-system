@@ -6,6 +6,18 @@ languages = APIRouter()
 
 @languages.post('/')
 async def add_language(request: Request, response: Response):
+    """
+    Add a new language.
+    
+    Args:
+        name: name of the language.
+        file_ext: extension name of the file.
+        run_cmd: command of running the code.
+        compile_cmd: command of compiling the code.
+        source_template: template of the code.
+        time_limit: limit of time by default.
+        memory_limit: limit of memory by default.
+    """
     try:
         data = await request.json()
     except json.decoder.JSONDecodeError:

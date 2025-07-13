@@ -9,31 +9,27 @@ import time
 import threading
 import re
 import tracemalloc
+import shutil
 
 stdout_output = b""
 stderr_output = b""
 
-# 存储正在运行的任务
 running_tasks = {}
 
-async def get_requirements(
-    problem_id: int,
-    language: str
-) -> tuple:
+async def get_requirements(problem_id: int) -> tuple:
     """
     Get requirements of the submission.
     
     Args:
         problem_id(int): id of the problem
-        language(str): language of the submission
         
     Returns:
         A tuple containing test cases, time limit, memory limit.
     """
     loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(None, get_requirements_sync, problem_id, language)
+    return await loop.run_in_executor(None, get_requirements_sync, problem_id)
 
-def get_requirements_sync(problem_id: int, language: str) -> tuple:
+def get_requirements_sync(problem_id: int) -> tuple:
     with sqlite3.connect('./app/oj_system.db') as conn:
         cursor = conn.cursor()
         
@@ -45,26 +41,9 @@ def get_requirements_sync(problem_id: int, language: str) -> tuple:
             )
         problem_row = cursor.fetchone()
         
-        # Get info of the language.
-        cursor.execute(
-                "SELECT * FROM languages WHERE name = ?",
-                (language, )
-            )
-        language_row = cursor.fetchone()
-        
-    if language_row:
-        # Set time and memory limit.
-        time_limit = problem_row[1]
-        if problem_row[1] == 1.0:
-            time_limit = language_row[5]
+    return (json.loads(problem_row[0]), problem_row[1], problem_row[2])
 
-        memory_limit = problem_row[2]
-        if problem_row[2] == 128:
-            memory_limit = language_row[6]
-        
-    return (json.loads(problem_row[0]), time_limit, memory_limit)
-
-def run_code(container):
+def run_code(container, language: str):
     """
     Run code in container and get output of outs and errors.
     """
@@ -75,19 +54,29 @@ def run_code(container):
     stdout_output = b""
     stderr_output = b""
     
-    exec_result = container.exec_run(
-        cmd = ["/bin/sh", "-c", "python main.py < input.txt"],
-        workdir = "/submission",
-        demux = True
-    )
-    
-    if exec_result.output:
-        stdout, stderr = exec_result.output
-        if stdout:
-            stdout_output += stdout
-        if stderr:
-            stderr_output += stderr
+    try:
+        if language == "python":
+            exec_result = container.exec_run(
+                cmd = ["/bin/sh", "-c", "python main.py < input.txt"],
+                workdir = "/submission",
+                demux = True
+            )
+        else:
+            exec_result = container.exec_run(
+                cmd = ["/bin/sh", "-c", "./main < input.txt"],
+                workdir = "/submission",
+                demux = True
+            )
             
+        if exec_result.output:
+            stdout, stderr = exec_result.output
+            if stdout:
+                stdout_output += stdout
+            if stderr:
+                stderr_output += stderr
+    except Exception:
+        stderr_output = b'RE'
+    
 def validate_python(code: str) -> bool:
     """
     Check code written in python.
@@ -134,17 +123,84 @@ def validate_cpp(code: str) -> bool:
     
     return True
 
-async def update_log(submission_id: int, status: str, counts: int, log: list):
-    loop = asyncio.get_event_loop()
-    await loop.run_in_executor(None, update_log_sync, submission_id, status, counts, log)
+async def update_log(
+    submission_id: int,
+    log: list
+):
+    """
+    Update log of submission and user
 
-def update_log_sync(submission_id: int, status: str, counts: int, log: list):
+    Args:
+        submission_id (int): id of the submission.
+        status (str): status of the submission.
+        counts (int): counts of the submission got.
+        log (list): whole log of the submission.
+    """
+    counts = 0
+    status = "success"
+    for item in log:
+        if item["result"] == "AC":
+            counts += 10
+        elif item["result"] == "WA":
+            pass
+        else:
+            status = "error"
+    
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(
+        None,
+        update_log_sync,
+        submission_id,
+        status,
+        counts,
+        log
+    )
+
+def update_log_sync(
+    submission_id: int,
+    status: str,
+    counts: int,
+    log: list
+):
     with sqlite3.connect('./app/oj_system.db') as conn:
         cursor = conn.cursor()
+        cursor.execute(
+            "SELECT user_id FROM submissions WHERE id = ?",
+            (submission_id,)
+        )
+        user_id = cursor.fetchone()[0]
+        
         cursor.execute(
             "UPDATE submissions SET status = ?, counts = ?, log = ? WHERE id = ?",
             (status, counts, json.dumps(log), submission_id,)
         )
+        conn.commit()
+        
+        resolve: bool = True
+        
+        for item in log:
+            if item["result"] != "AC":
+                resolve = False
+                break
+        
+        cursor.execute(
+            "SELECT submit_count, resolve_count FROM users WHERE id = ?",
+            (user_id, )
+        )
+        row = cursor.fetchone()
+        current_submit_count = row[0]
+        current_resolve_count = row[1]
+        new_submit_count = current_submit_count + 1
+        new_resolve_count = current_resolve_count
+
+        if resolve:
+            new_resolve_count += 1
+
+        cursor.execute(
+            "UPDATE users SET submit_count = ?, resolve_count = ? WHERE id = ?",
+            (new_submit_count, new_resolve_count, user_id,)
+        )
+        
         conn.commit()
           
 async def judge_in_docker(
@@ -155,7 +211,7 @@ async def judge_in_docker(
 ):
     
     # Get requirements of the submission
-    requirements = await get_requirements(problem_id, language)
+    requirements = await get_requirements(problem_id)
     test_cases = requirements[0]
     time_limit = requirements[1]
     memory_limit = requirements[2]
@@ -166,23 +222,60 @@ async def judge_in_docker(
         
     if language == "cpp":
         if not validate_cpp(code):
+            await update_log(submission_id, log)
             return
     elif language == "python":
         if not validate_python(code):
+            await update_log(submission_id, log)
             return
     else:
+        await update_log(submission_id, log)
         return
         
     os.makedirs(f"./app/submission/{submission_id}", exist_ok=True)
     
-    with open(f"./app/submission/{submission_id}/main.py", "w", encoding="utf-8") as f:
-        f.write(code)
+    if language == "cpp":
+        with open(f"./app/submission/{submission_id}/main.cpp", "w", encoding="utf-8") as f:
+            f.write(code)
+    elif language == "python":
+        with open(f"./app/submission/{submission_id}/main.py", "w", encoding="utf-8") as f:
+            f.write(code)
     
     client: docker.DockerClient = docker.from_env()
     
     seccomp_profile_path = os.path.abspath('./app/default_seccomp.json')
     with open(seccomp_profile_path, 'r') as f:
         seccomp_profile = json.load(f)
+        
+    # Compile
+    if language == "cpp":
+        compile_container = client.containers.run(
+            "cpp-eval-env",
+            name=f'oj_compile_{submission_id}',
+            detach=True,
+            remove=False,
+            volumes={
+                os.path.abspath(f"./app/submission/{submission_id}"): {
+                    'bind': '/submission',
+                    'mode': 'rw'
+                }
+            },
+            working_dir='/submission',
+            command=['sh', '-c', 'g++ -o main main.cpp -std=c++17 2>&1']
+        )
+        
+        # Wait for compile
+        compile_result = compile_container.wait()
+        compile_logs = compile_container.logs()
+        compile_container.remove(force=True)
+        
+        if compile_result['StatusCode'] != 0:
+            for j in range(len(test_cases)):
+                log[j]["result"] = "CE"
+            await update_log(submission_id, log)
+            shutil.rmtree(f"./app/submission/{submission_id}")
+            return
+        os.chmod(f"./app/submission/{submission_id}/main", 0o755)
     
     for i, item in enumerate(test_cases):
         # Prepare for the container, written by gemini.
@@ -209,9 +302,11 @@ async def judge_in_docker(
             },
             'working_dir': '/submission', 
             'stdin_open': True, 
-            'command': ['python', 'main.py'], 
         }
-        container = client.containers.run("python-eval-env", **container_args)
+        if language == "python":
+            container = client.containers.run("python-eval-env", **container_args)
+        else:
+            container = client.containers.run("cpp-eval-env", **container_args)
         
         # Prepare for input
         input_data = str(item["input"]).encode("utf-8")
@@ -228,7 +323,7 @@ async def judge_in_docker(
         tracemalloc.start()
         before = tracemalloc.take_snapshot()
 
-        exec_thread = threading.Thread(target = run_code, args = (container,))
+        exec_thread = threading.Thread(target = run_code, args = (container, language))
         exec_thread.start()
         exec_thread.join(timeout = time_limit)
         
@@ -253,8 +348,8 @@ async def judge_in_docker(
             container.stop(timeout = 1)
             container.remove(force = True)
             continue
-
-        if "runtime" in stdout_output.decode():
+        
+        if stderr_output.decode():
             # If RE, making following tests is unnecessary
             container.remove(force = True)
             for j in range(i, len(test_cases)):
@@ -266,7 +361,11 @@ async def judge_in_docker(
         test_out = str(stdout_output.decode()).split('\n')
         
         ans_out.pop()
-        test_out.pop()
+        if not test_out:
+            log[i]["result"] = "WA"
+            
+        if test_out[-1] == '':
+            test_out.pop()
         
         if test_out[-1] == '':
             test_out.pop()
@@ -294,16 +393,9 @@ async def judge_in_docker(
                     log[i]["result"] = "WA"
                     break
     
-    # Update log    
-    counts = 0
-    status = "success"
-    for item in log:
-        if item["result"] == "AC":
-            counts += 10
-        elif item["result"] == "WA":
-            pass
-        else:
-            status = "error"
+    # Update log
+    await update_log(submission_id, log)
     
-    await update_log(submission_id, status, counts, log)
+    # Delete dir
+    shutil.rmtree(f"./app/submission/{submission_id}")
     
