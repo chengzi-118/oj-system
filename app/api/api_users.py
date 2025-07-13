@@ -97,9 +97,9 @@ async def create_user(
             if role == "user":
                 return {
                     "code": 200,
-                    "msg": "success",
+                    "msg": "register success",
                     "data": {
-                        "user_id": int(result[0]),
+                        "user_id": str(result[0]),
                         "username": data["username"],
                         "join_time": time_str,
                         "role": "user",
@@ -112,7 +112,7 @@ async def create_user(
                     "code": 200,
                     "msg": "success",
                     "data": {
-                        "user_id": int(result[0]),
+                        "user_id": str(result[0]),
                         "username": data["username"]
                     }
                 }
@@ -159,7 +159,7 @@ async def get_info(user_id: int, request: Request, response: Response):
                 "code": 200,
                 "msg": "success",
                 "data": {
-                    "user_id": result[0],
+                    "user_id": str(result[0]),
                     "username": result[1],
                     "role": result[3]
                 }
@@ -225,7 +225,7 @@ async def change_role(user_id: int, request: Request, response: Response):
         return {
             "code": 200, 
             "msg": "role updated",
-            "data": {"user_id": user_id, "role": data["role"]}
+            "data": {"user_id": str(user_id), "role": data["role"]}
         }
 
 @users.get('/')
@@ -264,19 +264,19 @@ async def get_users(request: Request, response: Response):
         cursor.execute("SELECT * FROM users")
         rows = cursor.fetchall()
         
-    match_users = []
+    users = []
     
     for row in rows:
-        match_users.append({
-            "user_id": row[0],
+        users.append({
+            "user_id": str(row[0]),
             "username": row[1],
             "join_time": row[4],
             "submit_count": row[5],
             "resolve_count": row[6]
         })
        
-    if match_users:
-        result = get_page_detail(match_users, data.get("page"), data.get("page_size"))
+    if users:
+        result = get_page_detail(users, data.get("page"), data.get("page_size"))
         response.status_code = 200
         return {
             "code": 200, 

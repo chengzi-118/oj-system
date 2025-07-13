@@ -53,7 +53,7 @@ async def login(request: Request, response: Response):
                     "code": 200,
                     "msg": "login success",
                     "data": {
-                        "user_id": result[0],
+                        "user_id": str(result[0]),
                         "username": data['username'],
                         "role": result[3]
                     }

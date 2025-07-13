@@ -2,9 +2,9 @@ from fastapi import APIRouter, Request, Response
 import os
 import json
 import sqlite3
-from app.problem_data import ProblemProfile
 import asyncio
 from app.code_judge import judge_in_docker
+from app.page import get_page_detail
 
 submissions = APIRouter()
 
@@ -87,7 +87,7 @@ async def submit(request: Request, response: Response):
     return {
         "code": 200,
         "msg": "success",
-        "data": {"submission_id": submission_id, "status": "pending"}
+        "data": {"submission_id": str(submission_id), "status": "pending"}
     }
         
 @submissions.get('/{submission_id}/')
@@ -140,9 +140,91 @@ async def get_submission_info(
             return {"code": 404, "msg": "submission not found", "data": None}
         
 @submissions.get('/')
-async def get_all_submissions(request: Request, response: Response):
-    pass
- 
+async def get_submissions(
+    request: Request,
+    response: Response,
+    user_id: int = None,
+    problem_id: str = None,
+    status: str = None,
+    page: int = None,
+    page_size: int = None
+):
+    """
+    Get submissions of certain requirements
+
+    Args:
+        user_id: id of the user.
+        problem_id: id of the problem.
+        status: status of the submission.
+        page: page number.
+        page_size: number of items in one page.
+
+    Returns:
+        _type_: _description_
+    """
+    if user_id is None and problem_id is None:
+        response.status_code = 400
+        return {"code": 400, "msg": "format error", "data": None}
+    
+    if "user_id" not in request.session:
+        response.status_code = 401
+        return {"code": 401, "msg": "not logged in", "data": None}
+    
+    submissions: list = []
+    with sqlite3.connect('./app/oj_system.db') as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM submissions")
+        rows = cursor.fetchall()
+        
+    # Filter data    
+    for row in rows:
+        # User can only check own submission
+        if request.session["role"] != "admin":
+            if request.session["user_id"] != row[1]:
+                continue
+            
+        if user_id is not None and user_id != row[1]:
+            continue
+            
+        if problem_id is not None and problem_id != row[2]:
+            continue    
+        
+        if status is not None and status != row[5]:
+            continue    
+        
+        if row[5] == "success":
+            submissions.append({
+                "submission_id": str(row[0]),
+                "status": row[5],
+                "score": SCORE,
+                "counts": row[6]
+            })
+        else:
+            submissions.append({
+                "submission_id": str(row[0]),
+                "status": row[5],
+            })
+        
+    if submissions:
+        result = get_page_detail(
+            submissions,
+            page,
+            page_size
+        )
+        response.status_code = 200
+        return {
+            "code": 200, 
+            "msg": "success", 
+            "data": {"total": len(submissions), "submissions": result}
+        }
+    else:
+        response.status_code = 200
+        return {
+            "code": 200, 
+            "msg": "success", 
+            "data": {"total": 0, "submissions": []}
+        }     
+                
 @submissions.put('/{submission_id}/rejudge')
 async def rejudge(
     submission_id: int,
@@ -184,7 +266,7 @@ async def rejudge(
             return {
                 "code": 200,
                 "msg": "rejudge started",
-                "data": {"submission_id": submission_id, "status": "pending"}
+                "data": {"submission_id": str(submission_id), "status": "pending"}
             }
  
 @submissions.get('/{submission_id}/log')   
@@ -199,28 +281,50 @@ async def see_log(submission_id: int, request: Request, response: Response):
         row = cursor.fetchone()
         if row:
             # Check permission
+            if request.session["role"] == "admin":
+                response.status_code = 200
+                return {
+                  "code": 200,
+                  "msg": "success",
+                  "data": {
+                    "details": json.loads(str(row[7])),
+                    "score": SCORE,
+                    "counts": row[6],
+                  }
+                }
             if request.session["user_id"] != row[1]:
-                if request.session["role"] != "admin":
-                    response.status_code = 403
-                    return {
-                        "code": 403,
-                        "msg": "insufficient permissions",
-                        "data": None
-                    }
-                    
+                response.status_code = 403
+                return {
+                    "code": 403,
+                    "msg": "insufficient permissions",
+                    "data": None
+                }
+            
+            # Search public cases
+            cursor.execute("SELECT public_cases FROM problems WHERE id = ?", (row[2],))
+            public_cases: bool = cursor.fetchone()[0]
+            
             response.status_code = 200
-            return {
-              "code": 200,
-              "msg": "success",
-              "data": {
-                "status": json.loads(str(row[7])),
-                "score": SCORE,
-                "counts": row[6],
-              }
-            }
+            if public_cases:
+                return {
+                  "code": 200,
+                  "msg": "success",
+                  "data": {
+                    "details": json.loads(str(row[7])),
+                    "score": SCORE,
+                    "counts": row[6],
+                  }
+                }
+            else:
+                return {
+                  "code": 200,
+                  "msg": "success",
+                  "data": {
+                    "score": SCORE,
+                    "counts": row[6],
+                  }
+                }
         else:
             response.status_code = 404
             return {"code": 404, "msg": "submission not found", "data": None}
     
-    
-           

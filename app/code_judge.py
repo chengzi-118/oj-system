@@ -9,7 +9,6 @@ import time
 import threading
 import re
 import tracemalloc
-import shutil
 
 stdout_output = b""
 stderr_output = b""
@@ -273,7 +272,6 @@ async def judge_in_docker(
             for j in range(len(test_cases)):
                 log[j]["result"] = "CE"
             await update_log(submission_id, log)
-            shutil.rmtree(f"./app/submission/{submission_id}")
             return
         os.chmod(f"./app/submission/{submission_id}/main", 0o755)
     
@@ -395,7 +393,4 @@ async def judge_in_docker(
     
     # Update log
     await update_log(submission_id, log)
-    
-    # Delete dir
-    shutil.rmtree(f"./app/submission/{submission_id}")
     

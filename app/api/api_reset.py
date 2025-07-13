@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Request, Response
 import sqlite3
 from app.initialize_table import create_table
+from shutil import rmtree
+import time
 
 reset = APIRouter()
 
@@ -22,6 +24,12 @@ async def reset_sys(request: Request, response: Response):
     if request.session["role"] != "admin":
         response.status_code = 403
         return {"code": 403, "msg": "insufficient permissions", "data": None}
+    
+    # Clear submissions
+    try:
+        rmtree("./app/submission")
+    except Exception:
+        pass
 
     with sqlite3.connect('./app/oj_system.db') as conn:
         cursor = conn.cursor()
@@ -34,5 +42,3 @@ async def reset_sys(request: Request, response: Response):
     await create_table()
     response.status_code = 200
     return {"code": 200, "msg": "system reset successfully", "data": None}
-
-

@@ -41,7 +41,8 @@ async def create_table():
             time_limit REAL,
             memory_limit INTEGER,
             author TEXT,
-            difficulty TEXT
+            difficulty TEXT,
+            public_cases INTEGER
         )
     ''')
     conn.commit()

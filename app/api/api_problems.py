@@ -75,7 +75,7 @@ async def post(request: Request, response: Response):
             """INSERT INTO problems (
                 id, title, description, input_description, output_description, 
                 samples, constraints, testcases, hint, source, tags, 
-                time_limit, memory_limit, author, difficulty
+                time_limit, memory_limit, author, difficulty, public_cases
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 problem_data['id'], problem_data['title'],
@@ -84,7 +84,7 @@ async def post(request: Request, response: Response):
                 problem_data['constraints'], problem_data['testcases'],
                 problem_data['hint'], problem_data['source'], problem_data['tags'],
                 problem_data['time_limit'], problem_data['memory_limit'],
-                problem_data['author'], problem_data['difficulty']
+                problem_data['author'], problem_data['difficulty'], 0
             )
         )
         conn.commit()
