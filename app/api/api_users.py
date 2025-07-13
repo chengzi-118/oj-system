@@ -3,6 +3,7 @@ import sqlite3
 import json
 import bcrypt
 from datetime import datetime
+from app.page import get_page_detail
 
 users = APIRouter()
 
@@ -266,20 +267,16 @@ async def get_users(request: Request, response: Response):
     match_users = []
     
     for row in rows:
-        match_users.append({"user_id": row[0]})
+        match_users.append({
+            "user_id": row[0],
+            "username": row[1],
+            "join_time": row[4],
+            "submit_count": row[5],
+            "resolve_count": row[6]
+        })
        
     if match_users:
-        pagesize: int = len(match_users)
-        if "page_size" in data:
-            pagesize = data["page_size"]
-           
-        page: int = 0 
-        if "page" in data:
-            page = data["page"]
-        
-        result = match_users[
-            pagesize * page : pagesize * (page + 1)
-        ]
+        result = get_page_detail(match_users, data.get("page"), data.get("page_size"))
         response.status_code = 200
         return {
             "code": 200, 
