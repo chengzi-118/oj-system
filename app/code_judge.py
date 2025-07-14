@@ -370,12 +370,18 @@ async def judge_in_docker(
         test_out = str(stdout_output.decode()).split('\n')
         
         ans_out.pop()
+        
+        # Filter output
         if not test_out:
             log[i]["result"] = "WA"
+            continue
             
         if test_out[-1] == '':
             test_out.pop()
         
+        if not test_out:
+            log[i]["result"] = "WA"
+            continue
         if test_out[-1] == '':
             test_out.pop()
         
