@@ -128,13 +128,13 @@ async def get_info(problem_id: str, request: Request, response: Response):
             problem_info["samples"] = json.loads(row[5])
             problem_info["constraints"] = row[6]
             problem_info["testcases"] = json.loads(row[7])
-            problem_info["hint"] = row[8]
-            problem_info["source"] = row[9]
+            problem_info["hint"] = row[8] if row[8] else ''
+            problem_info["source"] = row[9] if row[9] else ''
             problem_info["tags"] = json.loads(row[10]) if row[10] else []
             problem_info["time_limit"] = row[11]
             problem_info["memory_limit"] = row[12]
-            problem_info["author"] = row[13]
-            problem_info["difficulty"] = row[14]
+            problem_info["author"] = row[13] if row[13] else ''
+            problem_info["difficulty"] = row[14] if row[14] else ''
             
             return {"code": 200, "msg": "success", "data": problem_info}
         
@@ -204,7 +204,7 @@ async def set_visibility(problem_id: str, request: Request, response: Response):
     try:
         data = await request.json()
         public_cases = data["public_cases"]
-    except json.decoder.JSONDecodeError:
+    except Exception:
         pass
     
     with sqlite3.connect('./app/oj_system.db') as conn:

@@ -168,7 +168,10 @@ async def get_info(user_id: int, request: Request, response: Response):
                 "data": {
                     "user_id": str(result[0]),
                     "username": result[1],
-                    "role": result[3]
+                    "role": result[3],
+                    "join_time": result[4],
+                    "submit_count": result[5],
+                    "resolve_count": result[6]
                 }
             }
         else:
@@ -236,7 +239,12 @@ async def change_role(user_id: int, request: Request, response: Response):
         }
 
 @users.get('/')
-async def get_users(request: Request, response: Response):
+async def get_users(
+    request: Request,
+    response: Response,
+    page: int = None,
+    page_size: int = None
+):
     """
     Get information of all users.
 
@@ -251,11 +259,6 @@ async def get_users(request: Request, response: Response):
         403: insufficient permissions.
         404: user not found.
     """
-    try:
-        data = await request.json()
-    except json.decoder.JSONDecodeError:
-        data = dict()
-    
     # Check permission
     if "user_id" not in request.session:
         response.status_code = 401
@@ -277,18 +280,27 @@ async def get_users(request: Request, response: Response):
         users.append({
             "user_id": str(row[0]),
             "username": row[1],
+            "role": row[3],
             "join_time": row[4],
             "submit_count": row[5],
             "resolve_count": row[6]
         })
        
     if users:
-        result = get_page_detail(users, data.get("page"), data.get("page_size"))
+        try:
+            result = get_page_detail(users, page, page_size)
+        except KeyError:
+            response.status_code = 400
+            return {
+                "code": 400, 
+                "msg": "format error", 
+                "data": None
+            }
         response.status_code = 200
         return {
             "code": 200, 
             "msg": "success", 
-            "data": {"total": len(result), "users": result}
+            "data": {"total": len(users), "users": result}
         }
     else:
         response.status_code = 200

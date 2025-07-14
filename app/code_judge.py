@@ -15,7 +15,7 @@ stderr_output = b""
 
 running_tasks = {}
 
-async def get_requirements(problem_id: int) -> tuple:
+async def get_requirements(problem_id: str) -> tuple:
     """
     Get requirements of the submission.
     
@@ -28,7 +28,7 @@ async def get_requirements(problem_id: int) -> tuple:
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(None, get_requirements_sync, problem_id)
 
-def get_requirements_sync(problem_id: int) -> tuple:
+def get_requirements_sync(problem_id: str) -> tuple:
     with sqlite3.connect('./app/oj_system.db') as conn:
         cursor = conn.cursor()
         
@@ -207,7 +207,7 @@ def update_log_sync(
           
 async def judge_in_docker(
     submission_id: int,
-    problem_id: int,
+    problem_id: str,
     code: str,
     language: str
 ):

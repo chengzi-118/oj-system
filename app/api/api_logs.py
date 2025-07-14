@@ -58,11 +58,19 @@ async def see_access(
             })
     
     if view_logs:
-        result = get_page_detail(
-            view_logs,
-            page,
-            page_size
-        )
+        try:
+            result = get_page_detail(
+                view_logs,
+                page,
+                page_size
+            )
+        except KeyError:
+            response.status_code = 400
+            return {
+                "code": 400, 
+                "msg": "format error", 
+                "data": None
+            }
         response.status_code = 200
         return {
             "code": 200, 
