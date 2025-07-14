@@ -131,15 +131,15 @@ async def update_log(
 
     Args:
         submission_id (int): id of the submission.
-        status (str): status of the submission.
-        counts (int): counts of the submission got.
         log (list): whole log of the submission.
     """
+    score = 0
     counts = 0
     status = "success"
     for item in log:
+        counts += 10
         if item["result"] == "AC":
-            counts += 10
+            score += 10
         elif item["result"] == "WA":
             pass
         else:
@@ -151,6 +151,7 @@ async def update_log(
         update_log_sync,
         submission_id,
         status,
+        score,
         counts,
         log
     )
@@ -158,6 +159,7 @@ async def update_log(
 def update_log_sync(
     submission_id: int,
     status: str,
+    score: int,
     counts: int,
     log: list
 ):
@@ -170,8 +172,9 @@ def update_log_sync(
         user_id = cursor.fetchone()[0]
         
         cursor.execute(
-            "UPDATE submissions SET status = ?, counts = ?, log = ? WHERE id = ?",
-            (status, counts, json.dumps(log), submission_id,)
+            """UPDATE submissions SET status = ?, score = ?,
+            counts = ?, log = ? WHERE id = ?""",
+            (status, score, counts, json.dumps(log), submission_id,)
         )
         conn.commit()
         
@@ -208,7 +211,15 @@ async def judge_in_docker(
     code: str,
     language: str
 ):
-    
+    """
+    Judge codes in docker.
+
+    Args:
+        submission_id (int): id of the submission
+        problem_id (int): id of the problem
+        code (str): code to be judged
+        language (str): languange of the code
+    """
     # Get requirements of the submission
     requirements = await get_requirements(problem_id)
     test_cases = requirements[0]

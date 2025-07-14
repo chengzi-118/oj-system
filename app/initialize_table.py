@@ -56,6 +56,7 @@ async def create_table():
             code TEXT NOT NULL,
             language TEXT NOT NULL,
             status TEXT NOT NULL,
+            score INTEGER,
             counts INTEGER,
             log TEXT,
             FOREIGN KEY (user_id) REFERENCES users (id),

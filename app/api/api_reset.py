@@ -43,5 +43,6 @@ async def reset_sys(request: Request, response: Response):
     request.session.pop("user_id")
     request.session.pop("user_name")
     request.session.pop("role")
+    request.session.pop("submit_time_list")
     response.status_code = 200
     return {"code": 200, "msg": "system reset successfully", "data": None}

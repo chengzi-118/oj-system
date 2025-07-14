@@ -18,6 +18,11 @@ async def add_language(request: Request, response: Response):
         time_limit: limit of time by default.
         memory_limit: limit of memory by default.
     """
+    # Check whether user logged in
+    if "user_id" not in request.session:
+        response.status_code = 401
+        return {"code": 401, "msg": "not logged in", "data": None}
+    
     try:
         data = await request.json()
     except json.decoder.JSONDecodeError:
@@ -27,11 +32,6 @@ async def add_language(request: Request, response: Response):
     if "name" not in data or "file_ext" not in data or "run_cmd" not in data:
         response.status_code = 400
         return {"code": 400, "msg": "format error", "data": None}
-    
-    # Check whether user logged in
-    if "user_id" not in request.session:
-        response.status_code = 401
-        return {"code": 401, "msg": "not logged in", "data": None}
     
     # Check whether optional needs in data.
     optional = ["compile_cmd", "source_template", "time_limit", "memory_limit"]
@@ -66,6 +66,18 @@ async def add_language(request: Request, response: Response):
         
 @languages.get('/')
 async def get_language_info(request: Request, response: Response):
+    """
+    Get information of all languages.
+
+    Returns:
+        401: not logged in.
+        200: success.
+    """
+    # Check whether user logged in
+    if "user_id" not in request.session:
+        response.status_code = 401
+        return {"code": 401, "msg": "not logged in", "data": None}
+    
     with sqlite3.connect('./app/oj_system.db') as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM languages")

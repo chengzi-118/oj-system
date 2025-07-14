@@ -19,8 +19,12 @@ async def create_admin(request: Request, response: Response):
     Returns:
         200: success.
         400: user exists / format error.
+        401: not logged in.
         403: insufficient permissions.
     """
+    if "user_id" not in request.session:
+        response.status_code = 401
+        return {"code": 401, "msg": "not logged in", "data": None}
     return await create_user(request, response, "admin")
 
 @users.post('/')
@@ -39,7 +43,13 @@ async def create_user(
     Returns:
         200: success.
         400: user exists / format error.
+        403: insufficient permissions
     """
+    if role == "admin":
+        if request.session["role"] != "admin":
+            response.status_code = 403
+            return {"code": 403, "msg": "insufficient permissions", "data": None}
+        
     try:
         data = await request.json()
     except json.decoder.JSONDecodeError:
@@ -59,12 +69,9 @@ async def create_user(
     
     if role == "admin":
         if "role" not in request.session:
-            response.status_code = 403
+            response.status_code = 400
             return {"code": 400, "msg": "insufficient permissions", "data": None}
-        if request.session["role"] != "admin":
-            response.status_code = 403
-            return {"code": 400, "msg": "insufficient permissions", "data": None}
-            
+        
     with sqlite3.connect('./app/oj_system.db') as conn:
         cursor = conn.cursor()
         try:
@@ -184,12 +191,6 @@ async def change_role(user_id: int, request: Request, response: Response):
         403: insufficient permissions.
         404: user not found.
     """
-    try:
-        data = await request.json()
-    except json.decoder.JSONDecodeError:
-        response.status_code = 400
-        return {"code": 400, "msg": "format error", "data": None}
-    
     # Check permission
     if "user_id" not in request.session:
         response.status_code = 401
@@ -198,6 +199,12 @@ async def change_role(user_id: int, request: Request, response: Response):
     if request.session["role"] != "admin":
         response.status_code = 403
         return {"code": 403, "msg": "insufficient permissions", "data": None}
+    
+    try:
+        data = await request.json()
+    except json.decoder.JSONDecodeError:
+        response.status_code = 400
+        return {"code": 400, "msg": "format error", "data": None}
     
     # Check data
     role_list = ["user", "admin", "banned"]

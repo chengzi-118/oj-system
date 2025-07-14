@@ -13,6 +13,20 @@ async def see_access(
     page: int = None,
     page_size: int = None
 ):
+    """
+    Let admin see all visits of logs.
+    
+    Args:
+        user_id (int, optional): id of the user. Defaults to None.
+        problem_id (str, optional): id of the problem. Defaults to None.
+        page: page number.
+        page_size: number of items in one page.
+
+    Returns:
+        200: success.
+        401: not logged in.
+        403: insufficient permissions.
+    """
     if "user_id" not in request.session:
         response.status_code = 401
         return {"code": 401, "msg": "not logged in", "data": None}

@@ -5,10 +5,9 @@ import sqlite3
 import asyncio
 from app.code_judge import judge_in_docker
 from app.page import get_page_detail
+from datetime import datetime
 
 submissions = APIRouter()
-
-SCORE = 10
 
 @submissions.post('/')
 async def submit(request: Request, response: Response):
@@ -28,6 +27,14 @@ async def submit(request: Request, response: Response):
         429: frequncy out of limit.
         
     """
+    if "user_id" not in request.session:
+        response.status_code = 401
+        return {"code": 401, "msg": "not logged in", "data": None}
+    
+    if request.session["role"] == "banned":
+        response.status_code = 403
+        return {"code": 403, "msg": "banned user", "data": None}
+    
     try:
         data = await request.json()
     except json.decoder.JSONDecodeError:
@@ -38,13 +45,18 @@ async def submit(request: Request, response: Response):
         response.status_code = 400
         return {"code": 400, "msg": "format error", "data": None}
     
-    if "user_id" not in request.session:
-        response.status_code = 401
-        return {"code": 401, "msg": "not logged in", "data": None}
-    
-    if request.session["role"] == "banned":
-        response.status_code = 403
-        return {"code": 403, "msg": "banned user", "data": None}
+    now_time = datetime.now()
+    if len(request.session["submit_time_list"]) == 3:
+        if (
+            now_time - datetime.fromisoformat(request.session["submit_time_list"][0])
+        ).total_seconds() < 60:
+            response.status_code = 429
+            return {"code": 429, "msg": "frequncy out of limit", "data": None}
+        else:
+            request.session["submit_time_list"].pop(0)
+            request.session["submit_time_list"].append(now_time.isoformat())
+    else:
+        request.session["submit_time_list"].append(now_time.isoformat())
     
     with sqlite3.connect('./app/oj_system.db') as conn:
         cursor = conn.cursor()
@@ -131,8 +143,8 @@ async def get_submission_info(
               "code": 200,
               "msg": "success",
               "data": {
-                "score": SCORE,
-                "counts": row[6],
+                "score": row[6],
+                "counts": row[7],
               }
             }
         else:
@@ -162,13 +174,13 @@ async def get_submissions(
     Returns:
         _type_: _description_
     """
-    if user_id is None and problem_id is None:
-        response.status_code = 400
-        return {"code": 400, "msg": "format error", "data": None}
-    
     if "user_id" not in request.session:
         response.status_code = 401
         return {"code": 401, "msg": "not logged in", "data": None}
+    
+    if user_id is None and problem_id is None:
+        response.status_code = 400
+        return {"code": 400, "msg": "format error", "data": None}
     
     submissions: list = []
     with sqlite3.connect('./app/oj_system.db') as conn:
@@ -196,8 +208,8 @@ async def get_submissions(
             submissions.append({
                 "submission_id": str(row[0]),
                 "status": row[5],
-                "score": SCORE,
-                "counts": row[6]
+                "score": row[6],
+                "counts": row[7]
             })
         else:
             submissions.append({
@@ -280,6 +292,22 @@ async def see_log(submission_id: int, request: Request, response: Response):
         cursor.execute("SELECT * FROM submissions WHERE id = ?", (submission_id,))
         row = cursor.fetchone()
         if row:
+            # Update view_logs
+            cursor.execute(
+                """INSERT INTO view_logs (
+                    user_id, problem_id, time, status
+                    ) VALUES (?, ?, ?, ?)""",
+                (
+                    row[1],
+                    row[2],
+                    datetime.now().strftime("%Y-%m-%d"),
+                    "403" if request.session["role"] != "admin" \
+                        and request.session["user_id"] != row[1] \
+                        else "200",
+                )
+            )
+            conn.commit()
+            
             # Check permission
             if request.session["role"] == "admin":
                 response.status_code = 200
@@ -287,9 +315,9 @@ async def see_log(submission_id: int, request: Request, response: Response):
                   "code": 200,
                   "msg": "success",
                   "data": {
-                    "details": json.loads(str(row[7])),
-                    "score": SCORE,
-                    "counts": row[6],
+                    "details": json.loads(str(row[8])),
+                    "score": row[6],
+                    "counts": row[7],
                   }
                 }
             if request.session["user_id"] != row[1]:
@@ -310,9 +338,9 @@ async def see_log(submission_id: int, request: Request, response: Response):
                   "code": 200,
                   "msg": "success",
                   "data": {
-                    "details": json.loads(str(row[7])),
-                    "score": SCORE,
-                    "counts": row[6],
+                    "details": json.loads(str(row[8])),
+                    "score": row[6],
+                    "counts": row[7],
                   }
                 }
             else:
@@ -320,8 +348,8 @@ async def see_log(submission_id: int, request: Request, response: Response):
                   "code": 200,
                   "msg": "success",
                   "data": {
-                    "score": SCORE,
-                    "counts": row[6],
+                    "score": row[6],
+                    "counts": row[7],
                   }
                 }
         else:

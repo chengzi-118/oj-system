@@ -48,6 +48,7 @@ async def login(request: Request, response: Response):
                 request.session["user_id"] = result[0]
                 request.session["user_name"] = data['username']
                 request.session["role"] = result[3]
+                request.session["submit_time_list"] = []
                 response.status_code = 200
                 return {
                     "code": 200,
@@ -76,6 +77,7 @@ async def logout(request: Request, response: Response):
         request.session.pop("user_id")
         request.session.pop("user_name")
         request.session.pop("role")
+        request.session.pop("submit_time_list")
         response.status_code = 200
         return {"code": 200, "msg": "logout success", "data": None}
     else:
