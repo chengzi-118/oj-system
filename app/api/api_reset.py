@@ -40,5 +40,8 @@ async def reset_sys(request: Request, response: Response):
         cursor.execute("DROP TABLE IF EXISTS languages")
         
     await create_table()
+    request.session.pop("user_id")
+    request.session.pop("user_name")
+    request.session.pop("role")
     response.status_code = 200
     return {"code": 200, "msg": "system reset successfully", "data": None}

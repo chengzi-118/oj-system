@@ -8,6 +8,7 @@ from app.api.api_languages import languages
 from app.api.api_reset import reset
 from app.api.api_export import export_data
 from app.api.api_import import import_data
+from app.api.api_logs import logs
 from app.initialize_table import create_table
 from starlette.middleware.sessions import SessionMiddleware
 from contextlib import asynccontextmanager
@@ -34,7 +35,8 @@ app.include_router(users, prefix = '/api/users')
 app.include_router(languages, prefix = '/api/languages')
 app.include_router(reset, prefix = '/api/reset')
 app.include_router(export_data, prefix = '/api/export')
-app.include_router(import_data, prefix = '/api/export')
+app.include_router(import_data, prefix = '/api/import')
+app.include_router(logs, prefix = '/api/logs')
 
 @app.get("/")
 async def welcome():

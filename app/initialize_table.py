@@ -78,6 +78,18 @@ async def create_table():
     ''')
     conn.commit()
     
+    # Create table of view_logs
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS view_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            problem_id TEXT NOT NULL,
+            time TEXT NOT NULL,
+            status TEXT NOT NULL
+        )
+    ''')
+    conn.commit()
+    
     # Check admin
     cursor.execute("SELECT * FROM users WHERE name = ?", ("admin",))
     result = cursor.fetchone()

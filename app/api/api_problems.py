@@ -76,7 +76,7 @@ async def post(request: Request, response: Response):
                 id, title, description, input_description, output_description, 
                 samples, constraints, testcases, hint, source, tags, 
                 time_limit, memory_limit, author, difficulty, public_cases
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 problem_data['id'], problem_data['title'],
                 problem_data['description'], problem_data['input_description'],
@@ -175,3 +175,59 @@ async def delete(problem_id: str, request: Request, response: Response):
         else:
             response.status_code = 404
             return {"code": 404, "msg": "problem not found", "data": None}
+
+@problems.put('/{problem_id}/log_visibility')
+async def set_visibility(problem_id: str, request: Request, response: Response):
+    """
+    Set visibility of problems.
+    
+    Args:
+        problem_id (str): id of the problem.
+        public_cases (bool): visibility, default to False
+
+    Returns:
+        401: not logged in.
+        403: insufficient permissions.
+        404: problem not found.
+        200: success.
+    """
+    if "user_id" not in request.session:
+        response.status_code = 401
+        return {"code": 401, "msg": "not logged in", "data": None}
+    
+    # Check permission
+    if request.session["role"] != "admin":
+        response.status_code = 403
+        return {"code": 403, "msg": "insufficient permissions", "data": None}
+    
+    public_cases: bool = False
+    try:
+        data = await request.json()
+        public_cases = data["public_cases"]
+    except json.decoder.JSONDecodeError:
+        pass
+    
+    with sqlite3.connect('./app/oj_system.db') as conn:
+        cursor = conn.cursor()
+        
+        cursor.execute(
+            "UPDATE problems SET public_cases = ? WHERE id = ?",
+            (1 if public_cases else 0, problem_id, )
+        )
+        
+        conn.commit()
+        
+        if cursor.rowcount == 0:
+            response.status_code = 404
+            return {
+                "code": 404, 
+                "msg": "problem not found",
+                "data": None
+            }
+        
+        response.status_code = 200
+        return {
+            "code": 200, 
+            "msg": "log visibility updated",
+            "data": {"problem_id": problem_id, "public_cases": public_cases}
+        }
