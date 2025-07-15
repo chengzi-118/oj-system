@@ -66,11 +66,6 @@ async def create_user(
     if len(data["password"]) < 6:
         response.status_code = 400
         return {"code": 400, "msg": "password too short", "data": None}
-    
-    if role == "admin":
-        if "role" not in request.session:
-            response.status_code = 400
-            return {"code": 400, "msg": "insufficient permissions", "data": None}
         
     with sqlite3.connect('./app/oj_system.db') as conn:
         cursor = conn.cursor()

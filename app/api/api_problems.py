@@ -36,6 +36,7 @@ async def get(request: Request, response: Response):
 async def post(request: Request, response: Response):
     """
     Add problems.
+    POST /api/problems/
 
     Returns:
         200: success
