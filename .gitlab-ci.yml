@@ -14,10 +14,14 @@ cache:
 variables:
   PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
   PYTHONPATH: "$CI_PROJECT_DIR"
+  DOCKER_HOST: tcp://docker:2375
+
 
 # Run tests
 test:
   stage: test
+  services:
+    - docker:dind
   before_script:
     - python --version
     - pip install -i https://pypi.tuna.tsinghua.edu.cn/simple --upgrade pip
