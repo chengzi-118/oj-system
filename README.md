@@ -1,1 +1,3 @@
-# pa2-oj-2024010852
+# OJ-system
+
+Python assignment II
